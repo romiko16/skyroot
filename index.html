@@ -156,10 +156,12 @@
         // --- BLUETOOTH CONNECTION ---
         async function connectDevice() {
             try {
-                log("Scanning for AeroGrow...");
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'AeroGrow_ESP32' }],
-                    optionalServices: [SERVICE_UUID]
+                log("Scanning for ALL BLE devices...");
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+            // Remove the name filter for testing
+            acceptAllDevices: true, 
+            optionalServices: [SERVICE_UUID]
+
                 });
 
                 bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
@@ -276,4 +278,5 @@
 </body>
 
 </html>
+
 
