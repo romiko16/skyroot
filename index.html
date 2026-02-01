@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyRoots | Smart Monitoring</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <h1>SkyRoots<span style="color:var(--primary)">.io</span></h1>
+            <div id="connectionDot" class="status-dot"></div>
+        </header>
+
+        <div id="screen-dashboard" class="screen active">
+            <div class="card" style="text-align: center;">
+                <div class="sensor-label">UV Cycle Remaining</div>
+                <div class="timer-display">
+                    <div class="timer-big" id="uvTimer">--:--:--</div>
+                </div>
+                <div class="status-row">
+                    <div class="chip" id="chipMist">💧 Mist</div>
+                    <div class="chip" id="chipUV">☀️ UV Light</div>
+                </div>
+            </div>
+
+            <div class="sensor-grid" style="margin-top: 20px;">
+                <div class="card">
+                    <div class="sensor-label">Temperature</div>
+                    <div class="sensor-value"><span id="valTemp">--</span><span class="unit">°C</span></div>
+                </div>
+                <div class="card">
+                    <div class="sensor-label">Humidity</div>
+                    <div class="sensor-value"><span id="valHum">--</span><span class="unit">%</span></div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <div class="sensor-label" style="margin-bottom: 10px;">Active Configuration</div>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span style="font-size: 2.5rem;">🌱</span>
+                    <div>
+                        <h3 id="activeProfileName">No Profile Loaded</h3>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);" id="activeProfileDetails">Connect to sync</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="screen-profiles" class="screen">
+            <h2 style="margin-bottom: 20px;">Select Crop</h2>
+            
+            <div class="profile-scroll">
+                </div>
+
+            <div class="card" id="previewCard" style="margin-top: 20px; display:none;">
+                <h3>Configuration Preview</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                    <div><div class="sensor-label">MIST INTERVAL</div><b id="preMist">300s</b></div>
+                    <div><div class="sensor-label">UV DURATION</div><b id="preUV">14h</b></div>
+                    <div><div class="sensor-label">TARGET TEMP</div><b id="preTemp">24°C</b></div>
+                    <div><div class="sensor-label">TARGET HUMIDITY</div><b id="preHum">65%</b></div>
+                </div>
+                <button class="btn" onclick="uploadProfile()">UPLOAD TO ESP32</button>
+            </div>
+        </div>
+
+        <div id="screen-settings" class="screen">
+            <div class="card">
+                <h2>Connection</h2>
+                <p style="margin: 10px 0; color: var(--text-muted); font-size: 0.9rem;">
+                    Ensure your ESP32 is powered on. Android users must enable Location Services for BLE scanning.
+                </p>
+                <button class="btn btn-outline" onclick="connectDevice()">SCAN & CONNECT</button>
+                <button class="btn" style="background: var(--danger); margin-top: 10px;" onclick="disconnectDevice()">DISCONNECT</button>
+                
+                <div id="logArea"></div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-item active" onclick="nav('dashboard', this)">📊</div>
+        <div class="nav-item" onclick="nav('profiles', this)">🌱</div>
+        <div class="nav-item" onclick="nav('settings', this)">⚙️</div>
+    </nav>
+
+    <script>
+        // --- CONSTANTS ---
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHAR_NOTIFY_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+        const CHAR_WRITE_UUID = "826a2d07-2831-411f-9988-3a9d91f2d658";
+        
+
+        const PROFILES = {
+            "Cucumber": {mist: 180, uv: 12, t: 24, h: 75, icon: "🥒"},
+            "Tomato": {mist: 300, uv: 14, t: 22, h: 65, icon: "🍅"},
+            "Lettuce": {mist: 600, uv: 10, t: 18, h: 60, icon: "🥬"},
+            "Cauliflower": {mist: 450, uv: 12, t: 20, h: 70, icon: "🥦"}
+        };
+
+        // --- GLOBAL VARIABLES ---
+        let bluetoothDevice;
+        let gattServer;
+        let writeCharacteristic;
+        let selectedProfile = null;
+
+        // --- NAVIGATION UI ---
+        function nav(screenId, el) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('screen-' + screenId).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        function log(msg) {
+            const logArea = document.getElementById('logArea');
+            const time = new Date().toLocaleTimeString();
+            logArea.innerHTML += `[${time}] ${msg}<br>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // --- PROFILE UI GENERATOR ---
+        function renderProfiles() {
+            const container = document.querySelector('.profile-scroll');
+            container.innerHTML = "";
+            for (const [name, data] of Object.entries(PROFILES)) {
+                const div = document.createElement('div');
+                div.className = 'profile-card';
+                div.innerHTML = `
+                    <div class="profile-img">${data.icon}</div>
+                    <div class="profile-name">${name}</div>
+                    <div class="profile-detail">Mist: ${data.mist}s</div>
+                `;
+                div.onclick = () => selectProfile(name, div);
+                container.appendChild(div);
+            }
+        }
+
+        function selectProfile(name, el) {
+            selectedProfile = name;
+            document.querySelectorAll('.profile-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            
+            const data = PROFILES[name];
+            document.getElementById('previewCard').style.display = 'block';
+            document.getElementById('preMist').innerText = data.mist + "s";
+            document.getElementById('preUV').innerText = data.uv + "h";
+            document.getElementById('preTemp').innerText = data.t + "°C";
+            document.getElementById('preHum').innerText = data.h + "%";
+        }
+
+        // --- BLUETOOTH CONNECTION ---
+        async function connectDevice() {
+            try {
+                log("Scanning for AeroGrow...");
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'AeroGrow_ESP32' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                log("Connecting to GATT...");
+                gattServer = await bluetoothDevice.gatt.connect();
+                
+                log("Getting Service...");
+                const service = await gattServer.getPrimaryService(SERVICE_UUID);
+                
+                log("Getting Characteristics...");
+                writeCharacteristic = await service.getCharacteristic(CHAR_WRITE_UUID);
+                const notifyCharacteristic = await service.getCharacteristic(CHAR_NOTIFY_UUID);
+                
+                await notifyCharacteristic.startNotifications();
+                notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                
+                document.getElementById('connectionDot').classList.add('connected');
+                log("Connected! Redirecting...");
+                
+                // Auto-switch to dashboard after 1 second
+                setTimeout(() => {
+                    nav('dashboard', document.querySelectorAll('.nav-item')[0]);
+                }, 1000);
+
+            } catch (error) {
+                log("Error: " + error);
+                console.error(error);
+            }
+        }
+
+        function disconnectDevice() {
+            if (gattServer && gattServer.connected) {
+                gattServer.disconnect();
+            }
+        }
+
+        function onDisconnected() {
+            document.getElementById('connectionDot').classList.remove('connected');
+            log("Device Disconnected");
+            document.getElementById('valTemp').innerText = "--";
+            document.getElementById('valHum').innerText = "--";
+            document.getElementById('uvTimer').innerText = "--:--:--";
+        }
+
+        // --- DATA HANDLING ---
+        function handleNotifications(event) {
+            const value = event.target.value;
+            const decoder = new TextDecoder('utf-8');
+            const jsonStr = decoder.decode(value);
+            
+            try {
+                const data = JSON.parse(jsonStr);
+                
+                // Update Sensors
+                document.getElementById('valTemp').innerText = data.t.toFixed(1);
+                document.getElementById('valHum').innerText = data.h.toFixed(1);
+                
+                // Update Chips (Glow Effect)
+                const mistChip = document.getElementById('chipMist');
+                const uvChip = document.getElementById('chipUV');
+                
+                data.m ? mistChip.classList.add('active') : mistChip.classList.remove('active');
+                data.u ? uvChip.classList.add('active') : uvChip.classList.remove('active');
+                
+                // Update Timer
+                const totalSeconds = parseInt(data.r);
+                if (totalSeconds > 0) {
+                    const h = Math.floor(totalSeconds / 3600);
+                    const m = Math.floor((totalSeconds % 3600) / 60);
+                    const s = totalSeconds % 60;
+                    document.getElementById('uvTimer').innerText = 
+                        `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                } else {
+                    document.getElementById('uvTimer').innerText = "OFF";
+                }
+
+            } catch (e) {
+                console.error("Parse error", e);
+            }
+        }
+
+        async function uploadProfile() {
+            if (!gattServer || !gattServer.connected) {
+                alert("Please connect to AeroGrow first!");
+                return;
+            }
+            
+            const p = PROFILES[selectedProfile];
+            const payload = {
+                plant: selectedProfile,
+                mist_int: p.mist,
+                uv_hrs: p.uv,
+                t_target: p.t,
+                h_target: p.h
+            };
+            
+            const encoder = new TextEncoder();
+            await writeCharacteristic.writeValue(encoder.encode(JSON.stringify(payload)));
+            
+            alert(`Profile for ${selectedProfile} uploaded!`);
+            
+            // UI Feedback
+            document.getElementById('activeProfileName').innerText = selectedProfile;
+            document.getElementById('activeProfileDetails').innerText = `Target: ${p.t}°C / ${p.h}%`;
+            
+            // Go back to dashboard
+            nav('dashboard', document.querySelectorAll('.nav-item')[0]);
+        }
+
+        // Initialize UI
+        renderProfiles();
+    </script>
+</body>
+</html>
