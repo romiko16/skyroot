@@ -1,0 +1,126 @@
+this is esp32 code nigga
+
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+#include <DHT.h>
+#include <ArduinoJson.h>
+
+// --- PIN DEFINITIONS ---
+#define DHTPIN 4
+#define DHTTYPE DHT22
+#define RELAY_MIST 18
+#define RELAY_UV 19
+
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHAR_NOTIFY_UUID    "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define CHAR_WRITE_UUID     "826a2d07-2831-411f-9988-3a9d91f2d658"
+
+DHT dht(DHTPIN, DHTTYPE);
+BLEServer* pServer = NULL;
+BLECharacteristic* pCharacteristicNotify = NULL;
+bool deviceConnected = false;
+
+struct State {
+  String plantName = "Default";
+  int mistInterval = 300; 
+  int uvHours = 12;
+  unsigned long lastMistTime = 0;
+  bool mistOn = false;
+  unsigned long uvStartTime = 0;
+  bool uvOn = true;
+  long uvRemaining = 0;
+} sysState;
+
+class MyServerCallbacks: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) { deviceConnected = true; };
+    void onDisconnect(BLEServer* pServer) { 
+      deviceConnected = false;
+      // IMPORTANT: Restart advertising immediately for Web Bluetooth reconnect
+      delay(500); 
+      pServer->getAdvertising()->start();
+    }
+};
+
+class MyCallbacks: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+      std::string rxValue = pCharacteristic->getValue();
+      if (rxValue.length() > 0) {
+        StaticJsonDocument<200> doc;
+        DeserializationError error = deserializeJson(doc, rxValue);
+        if (!error) {
+          sysState.plantName = doc["plant"].as<String>();
+          sysState.mistInterval = doc["mist_int"];
+          sysState.uvHours = doc["uv_hrs"];
+          sysState.uvStartTime = millis(); // Reset UV cycle
+        }
+      }
+    }
+};
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(RELAY_MIST, OUTPUT); pinMode(RELAY_UV, OUTPUT);
+  dht.begin();
+
+  BLEDevice::init("AeroGrow_ESP32");
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+
+  pCharacteristicNotify = pService->createCharacteristic(CHAR_NOTIFY_UUID, BLECharacteristic::PROPERTY_NOTIFY);
+  pCharacteristicNotify->addDescriptor(new BLE2902());
+
+  BLECharacteristic *pCharacteristicWrite = pService->createCharacteristic(CHAR_WRITE_UUID, BLECharacteristic::PROPERTY_WRITE);
+  pCharacteristicWrite->setCallbacks(new MyCallbacks());
+
+  pService->start();
+  
+  // ADVERTISING SETUP (Crucial for Web Bluetooth)
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06); 
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+  
+  sysState.uvStartTime = millis();
+}
+
+void loop() {
+  // Logic remains identical to previous version (omitted for brevity)
+  // Just ensure sensor data is sent every 1s
+  static unsigned long lastNotify = 0;
+  if (deviceConnected && (millis() - lastNotify > 1000)) {
+    lastNotify = millis();
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+    
+    // UV Logic Calc
+    unsigned long runTime = millis() - sysState.uvStartTime;
+    unsigned long target = sysState.uvHours * 3600 * 1000UL;
+    sysState.uvRemaining = (runTime < target) ? (target - runTime)/1000 : 0;
+    
+    StaticJsonDocument<200> doc;
+    doc["t"] = isnan(t) ? 0 : t;
+    doc["h"] = isnan(h) ? 0 : h;
+    doc["m"] = sysState.mistOn;
+    doc["u"] = sysState.uvOn;
+    doc["r"] = sysState.uvRemaining;
+    
+    char buffer[200];
+    serializeJson(doc, buffer);
+    pCharacteristicNotify->setValue(buffer);
+    pCharacteristicNotify->notify();
+  }
+  
+  // MIST Control Logic (Simplified)
+  unsigned long now = millis();
+  if (sysState.mistOn && (now - sysState.lastMistTime > 5000)) {
+     digitalWrite(RELAY_MIST, LOW); sysState.mistOn = false; sysState.lastMistTime = now;
+  } else if (!sysState.mistOn && (now - sysState.lastMistTime > (sysState.mistInterval * 1000))) {
+     digitalWrite(RELAY_MIST, HIGH); sysState.mistOn = true; sysState.lastMistTime = now;
+  }
+}

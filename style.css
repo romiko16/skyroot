@@ -1,0 +1,288 @@
+/* style.css */
+
+:root {
+    /* Deep Ocean Gradient Background */
+    --bg-gradient: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    
+    /* Glassmorphism Variables */
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-blur: 15px;
+    
+    /* Brand Colors */
+    --primary: #00ff88;  /* Neon Green */
+    --accent: #00d2ff;   /* Cyan */
+    --danger: #ff4b4b;   /* Red */
+    
+    /* Typography */
+    --text-main: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.6);
+    
+    /* UI Dimensions */
+    --card-radius: 24px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    background: var(--bg-gradient);
+    color: var(--text-main);
+    min-height: 100vh;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* --- MAIN LAYOUT --- */
+.app-container {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding-bottom: 100px; /* Space for bottom nav */
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 5px;
+}
+
+h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+/* --- STATUS INDICATOR --- */
+.status-dot {
+    width: 12px;
+    height: 12px;
+    background: var(--danger);
+    border-radius: 50%;
+    box-shadow: 0 0 15px var(--danger);
+    transition: all 0.3s ease;
+}
+
+.status-dot.connected {
+    background: var(--primary);
+    box-shadow: 0 0 15px var(--primary);
+}
+
+/* --- GLASS CARD COMPONENT --- */
+.card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--card-radius);
+    padding: 24px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease;
+}
+
+.card:active {
+    transform: scale(0.98);
+}
+
+/* --- GRADIENT TIMER TEXT --- */
+.timer-display {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    margin: 15px 0;
+}
+
+.timer-big {
+    font-size: 3.5rem;
+    font-weight: 800;
+    display: inline-block;
+    width: 100%;
+    
+    /* Gradient Text Magic */
+    background: linear-gradient(to right, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--primary); /* Fallback */
+}
+
+/* --- SENSOR GRID --- */
+.sensor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.sensor-value {
+    font-size: 2.2rem;
+    font-weight: 300;
+}
+
+.sensor-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+}
+
+.unit {
+    font-size: 1rem;
+    color: var(--primary);
+    margin-left: 5px;
+}
+
+/* --- CHIPS & STATUS --- */
+.status-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.chip {
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: 0.3s;
+}
+
+.chip.active {
+    background: rgba(0, 255, 136, 0.15);
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+}
+
+/* --- PROFILE SCROLLER --- */
+.profile-scroll {
+    display: flex;
+    overflow-x: auto;
+    gap: 15px;
+    padding-bottom: 10px;
+    scrollbar-width: none; /* Hide scrollbar Firefox */
+}
+.profile-scroll::-webkit-scrollbar { display: none; } /* Hide Chrome */
+
+.profile-card {
+    min-width: 130px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 16px;
+    padding: 15px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.3s;
+    text-align: center;
+}
+
+.profile-card.selected {
+    border-color: var(--primary);
+    background: rgba(0, 255, 136, 0.1);
+    transform: translateY(-5px);
+}
+
+.profile-img { font-size: 2.5rem; margin-bottom: 10px; }
+.profile-name { font-weight: 600; font-size: 0.9rem; }
+.profile-detail { font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; }
+
+/* --- BUTTONS --- */
+.btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 16px;
+    border: none;
+    background: var(--primary);
+    color: #000;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: 15px;
+    box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+    transition: all 0.3s;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 255, 136, 0.5);
+}
+
+.btn:active { transform: scale(0.96); }
+
+.btn-outline {
+    background: transparent;
+    border: 2px solid var(--primary);
+    color: var(--primary);
+    box-shadow: none;
+}
+
+/* --- BOTTOM NAVIGATION --- */
+.bottom-nav {
+    position: fixed;
+    bottom: 25px;
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 15px 30px;
+    border-radius: 50px;
+    display: flex;
+    gap: 40px;
+    border: 1px solid var(--glass-border);
+    z-index: 100;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.nav-item {
+    font-size: 1.6rem;
+    opacity: 0.4;
+    cursor: pointer;
+    transition: 0.3s;
+    filter: grayscale(100%);
+}
+
+.nav-item.active {
+    opacity: 1;
+    transform: scale(1.15);
+    filter: grayscale(0%);
+    text-shadow: 0 0 15px rgba(255,255,255,0.3);
+}
+
+/* --- SCREEN TRANSITIONS --- */
+.screen {
+    display: none;
+    animation: fadeIn 0.4s ease-out forwards;
+}
+
+.screen.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- LOG AREA --- */
+#logArea {
+    margin-top: 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    height: 100px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.2);
+    padding: 10px;
+    border-radius: 8px;
+}
